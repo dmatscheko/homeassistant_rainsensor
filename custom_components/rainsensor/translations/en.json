@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure Rain Sensor",
+        "description": "Set up your Rain Sensor to calculate rainfall.",
+        "data": {
+          "entity_id": "Rain Sensor Entity",
+          "volume_per_tilt_on": "Volume per On Switch (ml)",
+          "volume_per_tilt_off": "Volume per Off Switch (ml)",
+          "funnel_diameter": "Funnel Diameter (mm)",
+          "name": "Sensor Name",
+          "enable_missed_flip_recovery": "Enable missed flip recovery (for unreliable sensors)"
+        }
+      }
+    },
+    "error": {
+      "invalid_entity": "Invalid entity ID."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Adjust Rain Sensor Options",
+        "data": {
+          "entity_id": "Rain Sensor Entity",
+          "volume_per_tilt_on": "Volume per On Switch (ml)",
+          "volume_per_tilt_off": "Volume per Off Switch (ml)",
+          "funnel_diameter": "Funnel Diameter (mm)",
+          "name": "Sensor Name",
+          "enable_missed_flip_recovery": "Enable missed flip recovery (for unreliable sensors but can have side effects like counting too many flips)"
+        }
+      }
+    },
+    "error": {
+      "invalid_entity": "Invalid entity ID."
+    }
+  }
+}

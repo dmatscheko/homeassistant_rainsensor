@@ -1,0 +1,79 @@
+[project]
+name = "home-assistant-rainsensor"
+version = "1.0"
+description = "Rain Sensor custom component for Home Assistant"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [{name = "David Matscheko"}]
+requires-python = ">=3.13.2"
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/dmatscheko/homeassistant_rainsensor"
+Documentation = "https://github.com/dmatscheko/homeassistant_rainsensor"
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit",
+    "pytest",
+    "pytest-cov",
+    "pytest-homeassistant-custom-component",
+    "ruff",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+# Optional: If you want to configure uv-specific settings, like sources
+# sources = {pytest-homeassistant-custom-component = {git = "https://github.com/MatthewFlamm/pytest-homeassistant-custom-component"}}
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+preview = true
+
+[tool.ruff.lint]
+extend-select = [
+  "B",      # bugbear: Enforces best practices
+  "D",      # pydocstyle: Enforces PEP 257 docstrings
+  "I",      # isort: Import sorting
+  "UP",     # pyupgrade: Modern Python syntax
+]
+ignore = [
+  "E501",   # line-too-long (handled by line-length)
+  "D202",   # No blank lines after docstring
+  "D203",   # Blank line before class docstring
+  "D213",   # Multi-line docstring summary on second line
+  "ASYNC109", # Async timeout param (common in HA)
+  "ASYNC110", # await sleep in while (common in HA loops)
+  "ANN401", # Dynamically typed args (for HA typing flexibility)
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "nohomeassistant",
+]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+pythonpath = "."
+
+[tool.coverage.run]
+source = ["custom_components/rainsensor"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "raise AssertionError",
+    "if __name__ == .__main__.:",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["custom_components/rainsensor"]

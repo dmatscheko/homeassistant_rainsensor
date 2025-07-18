@@ -1,0 +1,6 @@
+{
+    "name": "Rain Sensor",
+    "render_readme": true,
+    "homeassistant": "2025.7.0",
+    "hide_default_branch": true
+}
