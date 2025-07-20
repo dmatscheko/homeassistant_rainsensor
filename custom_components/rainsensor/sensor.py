@@ -21,8 +21,10 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities
 ) -> None:
     """Set up the Rain Sensor sensor platform."""
+    # Retrieve the data handler for this config entry.
     data_handler: RainSensorDataHandler = hass.data[DOMAIN][entry.entry_id]
 
+    # Create all sensor entities that represent different aspects of the rain data (counts, rainfall, rate).
     daily_on_entity = DailyOnCountSensorEntity(data_handler)
     daily_off_entity = DailyOffCountSensorEntity(data_handler)
     total_on_entity = TotalOnCountSensorEntity(data_handler)
@@ -33,6 +35,7 @@ async def async_setup_entry(
     total_tilt_entity = TotalTiltSensorEntity(data_handler)
     rate_entity = RainfallRateSensorEntity(data_handler)
 
+    # Assign entities back to the data handler so it can update them directly when state changes.
     data_handler.daily_on_entity = daily_on_entity
     data_handler.daily_off_entity = daily_off_entity
     data_handler.total_on_entity = total_on_entity
@@ -43,6 +46,7 @@ async def async_setup_entry(
     data_handler.total_tilt_entity = total_tilt_entity
     data_handler.rate_entity = rate_entity
 
+    # Add all entities to Home Assistant.
     async_add_entities([
         daily_on_entity,
         daily_off_entity,
@@ -59,6 +63,7 @@ async def async_setup_entry(
 class DailyOnCountSensorEntity(SensorEntity, RestoreEntity):
     """Representation of a daily on count sensor entity."""
 
+    # Disable polling since updates are pushed via the data handler.
     _attr_should_poll = False
     _attr_native_unit_of_measurement = "counts"
     _attr_icon = "mdi:counter"
@@ -69,6 +74,7 @@ class DailyOnCountSensorEntity(SensorEntity, RestoreEntity):
         self._data_handler = data_handler
         self._attr_unique_id = f"{data_handler.unique_id}_daily_on_count"
         self._attr_name = f"{data_handler.name} Daily On Count"
+        # Group all sensors under one device in the UI for better organization.
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, data_handler.unique_id)},
             name=data_handler.name,
@@ -77,6 +83,7 @@ class DailyOnCountSensorEntity(SensorEntity, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         """Restore last state for daily on count if same day."""
         await super().async_added_to_hass()
+        # Retrieve last known state to restore count, but only if it's from the same day to avoid carrying over old data.
         last_state = await self.async_get_last_state()
         if last_state is not None and last_state.state not in (
             None,
@@ -95,6 +102,7 @@ class DailyOnCountSensorEntity(SensorEntity, RestoreEntity):
             )
         else:
             self._data_handler._flips_on = 0
+        # Update the state after restoration.
         self._data_handler.update_state()
 
     @property
@@ -171,6 +179,7 @@ class TotalOnCountSensorEntity(SensorEntity, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         """Restore last state for total on count."""
         await super().async_added_to_hass()
+        # Restore the total count without day check, as totals are cumulative across restarts.
         last_state = await self.async_get_last_state()
         if last_state is not None and last_state.state not in (
             None,
@@ -270,6 +279,7 @@ class TotalRainSensorEntity(SensorEntity):
         self._attr_native_unit_of_measurement = data_handler.unit_of_measurement
         self._attr_icon = data_handler.icon
         self._attr_device_class = data_handler.device_class
+        # Use TOTAL_INCREASING for totals that only go up.
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, data_handler.unique_id)},

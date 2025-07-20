@@ -22,12 +22,14 @@ class RainSensorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
         errors = {}
 
+        # Process user input if provided, validating and creating the entry if valid.
         if user_input is not None:
             # Validate entity ID exists and is a binary_sensor
             entity_id = user_input[CONF_ENTITY_ID]
             if not await self._validate_entity_id(entity_id):
                 errors["entity_id"] = "invalid_entity"
             else:
+                # Set a unique ID based on the entity ID to prevent duplicate configs for the same sensor.
                 await self.async_set_unique_id(
                     f"rainsensor_{entity_id.replace('.', '_')}"
                 )
@@ -36,6 +38,7 @@ class RainSensorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     title=user_input[CONF_NAME], data=user_input
                 )
 
+        # Define the schema for the config form, including required and optional fields with validation.
         data_schema = vol.Schema({
             vol.Required(CONF_ENTITY_ID): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["binary_sensor"])
@@ -53,12 +56,14 @@ class RainSensorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Optional("enable_missed_flip_recovery", default=False): bool,
         })
 
+        # Show the config form to the user.
         return self.async_show_form(
             step_id="user", data_schema=data_schema, errors=errors
         )
 
     async def _validate_entity_id(self, entity_id: str) -> bool:
         """Validate if the entity ID exists and is a binary sensor."""
+        # Check the entity registry to ensure the provided entity is a valid binary sensor.
         registry = er.async_get(self.hass)
         entry = registry.async_get(entity_id)
         return entry is not None and entry.domain == "binary_sensor"
@@ -69,6 +74,7 @@ class RainSensorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Get the options flow for this handler."""
+        # Return the options flow handler for editing existing config entries.
         return RainSensorOptionsFlowHandler(config_entry)
 
 
@@ -83,6 +89,7 @@ class RainSensorOptionsFlowHandler(config_entries.OptionsFlow):
         """Manage the options."""
         errors = {}
 
+        # Process updated options if provided, validating and saving if valid.
         if user_input is not None:
             entity_id = user_input[CONF_ENTITY_ID]
             if not await self._validate_entity_id(entity_id):
@@ -90,8 +97,10 @@ class RainSensorOptionsFlowHandler(config_entries.OptionsFlow):
             if not errors:
                 return self.async_create_entry(title="", data=user_input)
 
+        # Load current config to prefill defaults in the options form.
         current_config = self.config_entry.data
 
+        # Define schema similar to initial config but with current values as defaults.
         data_schema = vol.Schema({
             vol.Required(
                 CONF_ENTITY_ID, default=current_config.get(CONF_ENTITY_ID)
@@ -119,12 +128,14 @@ class RainSensorOptionsFlowHandler(config_entries.OptionsFlow):
             ): bool,
         })
 
+        # Show the options form.
         return self.async_show_form(
             step_id="init", data_schema=data_schema, errors=errors
         )
 
     async def _validate_entity_id(self, entity_id: str) -> bool:
         """Validate if the entity ID exists and is a binary sensor."""
+        # Same validation as in config flow, using entity registry.
         registry = er.async_get(self.hass)
         entry = registry.async_get(entity_id)
         return entry is not None and entry.domain == "binary_sensor"

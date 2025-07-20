@@ -39,9 +39,12 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Rain Sensor from a config entry."""
+    # Ensure the domain data structure exists in hass.data to store integration-specific data.
     hass.data.setdefault(DOMAIN, {})
+    # Combine config entry data and options into a single config dictionary for easier access.
     conf = {**entry.data, **entry.options}
 
+    # Initialize the main data handler which manages all state and logic for this integration instance.
     data_handler = RainSensorDataHandler(
         hass,
         conf[CONF_ENTITY_ID],
@@ -53,21 +56,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         conf.get("enable_missed_flip_recovery", False),
     )
 
+    # Store the data handler in hass.data for access by other parts of the integration, like the sensor platform.
     hass.data[DOMAIN][entry.entry_id] = data_handler
 
+    # Forward the setup to the sensor platform to create the actual sensor entities.
     await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
 
+    # Set up a listener for state changes on the monitored binary sensor entity (the rain gauge flip sensor).
     data_handler.remove_state_listener = async_track_state_change_event(
         hass, conf[CONF_ENTITY_ID], data_handler.handle_state_change
     )
 
+    # Restore any recent tip history from Home Assistant's recorder to handle restarts gracefully.
     await data_handler.restore_tip_history()
 
+    # Schedule daily resets at midnight and periodic rate updates.
     data_handler.schedule_midnight_reset()
     data_handler.schedule_rate_update()
 
+    # Register an unload callback to clean up resources when the config entry is removed.
     entry.async_on_unload(data_handler.async_unload)
 
+    # Add a listener for config entry updates to reload the integration when options change.
     entry.async_on_unload(entry.add_update_listener(async_update_listener))
 
     return True
@@ -75,12 +85,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle options update."""
+    # Reload the entire config entry when options are updated to apply changes immediately.
     await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    # Unload the sensor platform first to remove entities cleanly.
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, ["sensor"]):
+        # If unloading succeeded, remove the data handler from hass.data and call its unload method to clean up listeners.
         if entry.entry_id in hass.data.get(DOMAIN, {}):
             data_handler: RainSensorDataHandler = hass.data[DOMAIN].pop(entry.entry_id)
             data_handler.unload()
@@ -102,6 +115,7 @@ class RainSensorDataHandler:
         enable_missed_flip_recovery: bool,
     ) -> None:
         """Initialize the data handler."""
+        # Store core references and configuration values needed for calculations.
         self._hass = hass
         self._entity_id = entity_id
         self._volume_per_tilt_on = volume_per_tilt_on
@@ -110,6 +124,7 @@ class RainSensorDataHandler:
         self._name = name
         self._unique_id = unique_id
         self._enable_missed_flip_recovery = enable_missed_flip_recovery
+        # Initialize counters for flips (tilts) and states for rainfall amounts.
         self._flips_on: int = 0
         self._flips_off: int = 0
         self._total_flips_on: int = 0
@@ -117,12 +132,15 @@ class RainSensorDataHandler:
         self._state: float = 0.0  # Daily rainfall in mm
         self._total_state: float = 0.0  # Total rainfall in mm
         self._rate: float = 0.0  # Rainfall rate in mm/h
+        # Use a deque for efficient management of recent tip history (last hour) for rate calculation.
         self._tip_history: deque[tuple[datetime, float]] = deque()  # (time, volume_ml)
 
-        # Precompute conversion factor: rain depth in mm = (volume_ml * 1000) / area_mm²
+        # Precompute the conversion factor from volume (ml) to rain depth (mm) based on funnel area.
+        # This avoids recalculating pi*r^2 every time and ensures efficiency.
         funnel_area_mm2 = (funnel_diameter / 2.0) ** 2 * 3.141592653589793
         self._factor_per_ml = 1000.0 / funnel_area_mm2 if funnel_area_mm2 > 0 else 0.0
 
+        # References to sensor entities will be set later during setup for updating states.
         self.daily_on_entity: DailyOnCountSensorEntity | None = None
         self.daily_off_entity: DailyOffCountSensorEntity | None = None
         self.total_on_entity: TotalOnCountSensorEntity | None = None
@@ -132,6 +150,7 @@ class RainSensorDataHandler:
         self.daily_tilt_entity: DailyTiltSensorEntity | None = None
         self.total_tilt_entity: TotalTiltSensorEntity | None = None
         self.rate_entity: RainfallRateSensorEntity | None = None
+        # Placeholders for listener removal callbacks to clean up on unload.
         self.remove_state_listener: callback | None = None
         self._remove_midnight_reset: callback | None = None
         self._remove_rate_update: callback | None = None
@@ -194,6 +213,7 @@ class RainSensorDataHandler:
     @callback
     def handle_state_change(self, event: EventStateChangedData) -> None:
         """Handle state changes of the monitored binary sensor."""
+        # Extract old and new states from the event for comparison.
         old_state_obj = event.data.get("old_state")
         new_state_obj = event.data.get("new_state")
 
@@ -202,6 +222,7 @@ class RainSensorDataHandler:
 
         _LOGGER.debug(f"State change detected: old={old_state}, new={new_state}")
 
+        # Ignore invalid states to prevent processing errors.
         if new_state not in ("on", "off"):
             _LOGGER.debug(f"Ignoring invalid state: {new_state}")
             return
@@ -214,9 +235,11 @@ class RainSensorDataHandler:
             _LOGGER.debug(f"Ignoring invalid old state: {old_state}")
             return
 
+        # Initialize variables for volume addition and flip detection.
         volume = 0.0
         flipped = False
 
+        # Detect actual state transitions (flips) and increment counters accordingly.
         if old_state != new_state:
             # Actual transition
             flipped = True
@@ -228,6 +251,7 @@ class RainSensorDataHandler:
                 self._flips_off += 1
                 self._total_flips_off += 1
                 volume = self._volume_per_tilt_off
+        # If recovery is enabled, handle cases where flips might have been missed (same state but event triggered).
         elif self._enable_missed_flip_recovery:
             # Same state, but event fired: assume missed even number of flips (at least two)
             _LOGGER.debug("Same state event: assuming missed flips")
@@ -245,19 +269,23 @@ class RainSensorDataHandler:
                 self._total_flips_off += 1
                 volume = self._volume_per_tilt_on + self._volume_per_tilt_off
 
+        # If a flip was detected, record the tip with timestamp and update rate.
         if flipped:
             now = datetime.now(dt_util.get_default_time_zone())
             self._tip_history.append((now, volume))
             self._prune_history()
             self._update_rate()
 
+        # Always update the rainfall states after potential changes.
         self.update_state()
 
     def update_state(self) -> None:
         """Calculate rainfall in mm and notify the entities."""
+        # Calculate daily and total volumes in ml from flip counts.
         daily_volume_ml = (self._volume_per_tilt_on * self._flips_on) + (
             self._volume_per_tilt_off * self._flips_off
         )
+        # Convert to mm using precomputed factor, rounding to one decimal and ensuring non-negative.
         self._state = (
             round(daily_volume_ml * self._factor_per_ml, 1)
             if daily_volume_ml >= 0
@@ -272,7 +300,7 @@ class RainSensorDataHandler:
             else 0.0
         )
 
-        # Update all entities if available
+        # Trigger state updates for all associated sensor entities if they exist.
         for entity in [
             self.daily_on_entity,
             self.daily_off_entity,
@@ -289,6 +317,7 @@ class RainSensorDataHandler:
 
     def _prune_history(self) -> None:
         """Remove tips older than 1 hour."""
+        # Efficiently remove old entries from the front of the deque to keep only the last hour's data for rate calculation.
         now = datetime.now(dt_util.get_default_time_zone())
         while self._tip_history and (now - self._tip_history[0][0]) > timedelta(
             hours=1
@@ -297,6 +326,7 @@ class RainSensorDataHandler:
 
     def _update_rate(self) -> None:
         """Update the rainfall rate based on tips in the last hour."""
+        # Sum volumes from the last hour and convert to mm/h (since it's over 1 hour, rate is just the total mm).
         total_volume_ml = sum(volume for _, volume in self._tip_history)
         self._rate = (
             round(total_volume_ml * self._factor_per_ml, 1)
@@ -306,9 +336,11 @@ class RainSensorDataHandler:
 
     async def restore_tip_history(self) -> None:
         """Restore tip history from the last hour using recorder data."""
+        # Define time range for the last hour in UTC for querying the recorder.
         start_time = dt_util.utcnow() - timedelta(hours=1)
         end_time = dt_util.utcnow()
 
+        # Fetch significant state changes from the recorder in a background job to avoid blocking.
         states = await self._hass.async_add_executor_job(
             lambda: history.get_significant_states(
                 self._hass,
@@ -322,6 +354,7 @@ class RainSensorDataHandler:
         if not states:
             return
 
+        # Sort states by timestamp and reconstruct tips from transitions.
         states.sort(key=lambda s: s.last_changed)
         prev_state = None
         for state in states:
@@ -330,6 +363,7 @@ class RainSensorDataHandler:
                 continue
             old = prev_state.state
             new = state.state
+            # Only count valid transitions as tips.
             if old != new and old in ("on", "off") and new in ("on", "off"):
                 if new == "on":
                     volume = self._volume_per_tilt_on
@@ -341,11 +375,13 @@ class RainSensorDataHandler:
                 self._tip_history.append((tip_time, volume))
             prev_state = state
 
+        # Prune and update rate after restoring history.
         self._prune_history()
         self._update_rate()
 
     def schedule_midnight_reset(self) -> None:
         """Schedule reset at midnight in the system's timezone."""
+        # Calculate time until next midnight and schedule a one-time call to reset daily counters.
         now = datetime.now(dt_util.get_default_time_zone())
         midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
             days=1
@@ -359,6 +395,7 @@ class RainSensorDataHandler:
     @callback
     def reset_sensor(self, _: datetime) -> None:
         """Reset daily counters and state at midnight."""
+        # Reset daily flips and update states, then reschedule for next midnight.
         self._flips_on = 0
         self._flips_off = 0
         self.update_state()
@@ -366,6 +403,7 @@ class RainSensorDataHandler:
 
     def schedule_rate_update(self) -> None:
         """Schedule periodic update for rainfall rate."""
+        # Set up a recurring interval to prune history and update rate every minute.
         self._remove_rate_update = async_track_time_interval(
             self._hass, self.periodic_rate_update, timedelta(minutes=1)
         )
@@ -373,6 +411,7 @@ class RainSensorDataHandler:
     @callback
     def periodic_rate_update(self, now: datetime) -> None:
         """Periodic prune and update for rainfall rate."""
+        # Prune old tips, recalculate rate, and update the rate entity if it exists.
         self._prune_history()
         self._update_rate()
         if self.rate_entity:
@@ -380,6 +419,7 @@ class RainSensorDataHandler:
 
     def unload(self) -> None:
         """Clean up listeners on unload."""
+        # Remove all registered listeners to prevent memory leaks or errors after unload.
         if self.remove_state_listener:
             self.remove_state_listener()
             self.remove_state_listener = None
