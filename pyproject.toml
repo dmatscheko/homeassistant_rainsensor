@@ -1,6 +1,6 @@
 [project]
 name = "home-assistant-rainsensor"
-version = "1.0"
+version = "1.1"
 description = "Rain Sensor custom component for Home Assistant"
 readme = "README.md"
 license = {file = "LICENSE"}

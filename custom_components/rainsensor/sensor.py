@@ -17,7 +17,9 @@ from homeassistant.util import dt as dt_util
 from . import DOMAIN, RainSensorDataHandler
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities) -> None:
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities
+) -> None:
     """Set up the Rain Sensor sensor platform."""
     # Retrieve the data handler for this config entry.
     data_handler: RainSensorDataHandler = hass.data[DOMAIN][entry.entry_id]
@@ -95,7 +97,9 @@ class DailyOnCountSensorEntity(SensorEntity, RestoreEntity):
             tz = dt_util.get_time_zone(self.hass.config.time_zone)
             last_updated_date = last_state.last_updated.astimezone(tz).date()
             current_date = dt_util.now().date()
-            self._data_handler._flips_on = count if last_updated_date == current_date else 0
+            self._data_handler._flips_on = (
+                count if last_updated_date == current_date else 0
+            )
         else:
             self._data_handler._flips_on = 0
         # Update the state after restoration.
@@ -141,7 +145,9 @@ class DailyOffCountSensorEntity(SensorEntity, RestoreEntity):
             tz = dt_util.get_time_zone(self.hass.config.time_zone)
             last_updated_date = last_state.last_updated.astimezone(tz).date()
             current_date = dt_util.now().date()
-            self._data_handler._flips_off = count if last_updated_date == current_date else 0
+            self._data_handler._flips_off = (
+                count if last_updated_date == current_date else 0
+            )
         else:
             self._data_handler._flips_off = 0
         self._data_handler.update_state()
